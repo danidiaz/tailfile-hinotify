@@ -9,31 +9,45 @@ import Control.Concurrent.MVar
 import Control.Monad
 import Control.Exception
 import System.INotify
-import System.IO (withFile,IOMode(ReadMode),hSeek,SeekMode(AbsoluteSeek,SeekFromEnd),hFileSize)
+import System.IO (withFile
+                 ,IOMode(ReadMode)
+                 ,hSeek
+                 ,SeekMode(AbsoluteSeek,SeekFromEnd)
+                 ,hFileSize)
 import System.IO.Error (isDoesNotExistError)
 
-tailFile :: FilePath -> (a -> Data.ByteString.ByteString -> IO a) -> IO a -> IO void
-tailFile filepath callback initial = withINotify $ \i -> do
-    sem <- newEmptyMVar
-    state <- initial
-    _ <- addWatch i [Modify,MoveSelf,DeleteSelf] filepath (\event -> do _ <- tryTakeMVar sem
-                                                                        putMVar sem event)
-    loop sem state
+tailFile :: FilePath 
+         -> (a -> Data.ByteString.ByteString -> IO a) 
+         -> IO a 
+         -> IO void
+tailFile filepath callback initial = withINotify (\i -> 
+    do sem <- newEmptyMVar
+       state <- initial
+       loop i sem state)
     where
-    loop sem =
+    loop i sem =
         let go pristine a = do ea' <- tryJust (guard . isDoesNotExistError)
-                                              (withFile filepath ReadMode (\h -> do if pristine then hSeek h SeekFromEnd 0
-                                                                                                else return ()
-                                                                                    sleeper sem h a))
+                                              (watchFile pristine i sem a)
                                case ea' of 
                                   Left ()  -> do threadDelay 5e5
                                                  go False a -- reuse the state
                                   Right a' -> go False a'
         in  go True
+    watchFile pristine i sem a = withFile filepath ReadMode (\h -> 
+         do w <- addWatch i 
+                          [Modify,MoveSelf,DeleteSelf] 
+                          filepath 
+                          (\event -> do _ <- tryTakeMVar sem
+                                        putMVar sem event)
+            if pristine then hSeek h SeekFromEnd 0
+                        else return ()
+            a' <- sleeper sem h a
+            removeWatch w
+            return a')
     sleeper sem h =
         let go ms a = do event <- takeMVar sem
                          size' <- hFileSize h 
-                         for_ ms (\size -> if size' < size -- truncation detected
+                         for_ ms (\size -> if size' < size -- truncation 
                                            then hSeek h AbsoluteSeek 0
                                            else return ())
                          a' <- drainBytes h a
