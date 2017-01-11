@@ -33,17 +33,17 @@ tailFile filepath callback initial = withINotify (\i ->
                                                  go False a -- reuse the state
                                   Right a' -> go False a'
         in  go True
-    watchFile pristine i sem a = withFile filepath ReadMode (\h -> 
-         do w <- addWatch i 
+    watchFile pristine i sem a = 
+        bracket (addWatch i 
                           [Modify,MoveSelf,DeleteSelf] 
                           filepath 
                           (\event -> do _ <- tryTakeMVar sem
-                                        putMVar sem event)
-            if pristine then hSeek h SeekFromEnd 0
-                        else return ()
-            a' <- sleeper sem h a
-            removeWatch w
-            return a')
+                                        putMVar sem event))
+                removeWatch
+                (\_ -> withFile filepath ReadMode (\h -> 
+                           do if pristine then hSeek h SeekFromEnd 0
+                                          else return ()
+                              sleeper sem h a))
     sleeper sem h =
         let go ms a = do event <- takeMVar sem
                          size' <- hFileSize h 
