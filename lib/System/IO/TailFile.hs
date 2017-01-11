@@ -2,6 +2,7 @@
 module System.IO.TailFile (tailFile) where
 
 import Data.Foldable
+import Data.Monoid
 import qualified Data.ByteString
 import Data.ByteString.Lazy.Internal (defaultChunkSize)
 import Control.Concurrent (threadDelay)
@@ -37,8 +38,13 @@ tailFile filepath callback initial = withINotify (\i ->
         bracket (addWatch i 
                           [Modify,MoveSelf,DeleteSelf] 
                           filepath 
-                          (\event -> do _ <- tryTakeMVar sem
-                                        putMVar sem event))
+                          (\event -> let stop = Any (case event of
+                                                        MovedSelf {} -> True
+                                                        Deleted {} -> True
+                                                        _ -> False)
+                                     in do old <- fold <$> tryTakeMVar sem
+                                           new <- evaluate $ old <> stop
+                                           putMVar sem new))
                 removeWatch
                 (\_ -> withFile filepath ReadMode (\h -> 
                            do if pristine then hSeek h SeekFromEnd 0
@@ -51,10 +57,8 @@ tailFile filepath callback initial = withINotify (\i ->
                                            then hSeek h AbsoluteSeek 0
                                            else return ())
                          a' <- drainBytes h a
-                         case event of
-                            MovedSelf {} -> return a'
-                            Deleted {} -> return a'
-                            _ -> do go (Just size') a'
+                         if getAny event then return a'
+                                         else go (Just size') a'
         in  go Nothing
     drainBytes h = 
         let go a = do c <- Data.ByteString.hGetSome h defaultChunkSize
