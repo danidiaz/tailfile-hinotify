@@ -1,4 +1,4 @@
-{-| Tail files in Unix. 
+{-| Tail files in Linux. 
 
     The functions in this module do not use any particular streaming library.
     They just accept an initial state and a monadic update function.
@@ -6,6 +6,7 @@
 
 
 {-# language NumDecimals #-}
+{-# language BangPatterns #-}
 module System.IO.TailFile (tailFile) where
 
 import Data.Foldable
@@ -75,7 +76,7 @@ tailFile filepath callback initial = withINotify (\i ->
                          for_ ms (\size -> if size' < size -- truncation 
                                            then hSeek h AbsoluteSeek 0
                                            else return ())
-                         a' <- drainBytes h a
+                         !a' <- drainBytes h a
                          if getAny event then return a'
                                          else go (Just size') a'
         in  go Nothing
@@ -83,6 +84,6 @@ tailFile filepath callback initial = withINotify (\i ->
         let go a = do c <- Data.ByteString.hGetSome h defaultChunkSize
                       if Data.ByteString.null c
                          then do return a
-                         else do a' <- callback a c
+                         else do !a' <- callback a c
                                  drainBytes h a'
         in  go
