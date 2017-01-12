@@ -85,5 +85,5 @@ tailFile filepath callback initial = withINotify (\i ->
                       if Data.ByteString.null c
                          then do return a
                          else do !a' <- callback a c
-                                 drainBytes h a'
+                                 go a'
         in  go
