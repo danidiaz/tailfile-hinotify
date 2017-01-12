@@ -41,34 +41,34 @@ tailFile :: FilePath
          -> IO a -- ^ Monadic action for getting the initial state.
          -> IO void -- ^ The result action never returns!
 tailFile filepath callback initial = withINotify (\i -> 
-    do sem <- newEmptyMVar
-       state <- initial
-       loop i sem state)
+    do state <- initial
+       loop i state)
     where
-    loop i sem =
+    loop i =
         let go pristine a = do ea' <- tryJust (guard . isDoesNotExistError)
-                                              (watchFile pristine i sem a)
+                                              (watchFile pristine i a)
                                case ea' of 
                                   Left ()  -> do threadDelay 5e5
                                                  go False a -- reuse the state
                                   Right a' -> go False a'
         in  go True
-    watchFile pristine i sem a = 
-        bracket (addWatch i 
-                          [Modify,MoveSelf,DeleteSelf] 
-                          filepath 
-                          (\event -> let stop = Any (case event of
-                                                        MovedSelf {} -> True
-                                                        Deleted {} -> True
-                                                        _ -> False)
-                                     in do old <- fold <$> tryTakeMVar sem
-                                           new <- evaluate $ old <> stop
-                                           putMVar sem new))
-                removeWatch
-                (\_ -> withFile filepath ReadMode (\h -> 
-                           do if pristine then hSeek h SeekFromEnd 0
-                                          else return ()
-                              sleeper sem h a))
+    watchFile pristine i a = 
+        do sem <- newMVar mempty
+           bracket (addWatch i 
+                             [Modify,MoveSelf,DeleteSelf] 
+                             filepath 
+                             (\event -> let stop = Any (case event of
+                                                           MovedSelf {} -> True
+                                                           Deleted {} -> True
+                                                           _ -> False)
+                                        in do old <- fold <$> tryTakeMVar sem
+                                              new <- evaluate $ old <> stop
+                                              putMVar sem new))
+                   removeWatch
+                   (\_ -> withFile filepath ReadMode (\h -> 
+                              do if pristine then hSeek h SeekFromEnd 0
+                                             else return ()
+                                 sleeper sem h a))
     sleeper sem h =
         let go ms a = do event <- takeMVar sem
                          size' <- hFileSize h 
