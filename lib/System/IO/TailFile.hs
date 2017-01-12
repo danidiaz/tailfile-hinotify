@@ -1,3 +1,10 @@
+{-| Tail files in Unix. 
+
+    The functions in this module do not use any particular streaming library.
+    They just accept an initial state and a monadic update function.
+ -}
+
+
 {-# language NumDecimals #-}
 module System.IO.TailFile (tailFile) where
 
@@ -17,10 +24,22 @@ import System.IO (withFile
                  ,hFileSize)
 import System.IO.Error (isDoesNotExistError)
 
+{-| Tail a file, while keeping an internal state.
+ 
+    If the file doesn't exist, `tailFile` will poll for it until it is found.
+
+    If `tailFile` detects the file has been moved or renamed, it goes back to
+    watching a file with the original name.
+
+    `tailFile` also detects file truncations, in which case it starts reading
+    again from the beginning.
+
+    Data already existing in the file before `tailFile` is invoked is ignored.
+ -}
 tailFile :: FilePath 
-         -> (a -> Data.ByteString.ByteString -> IO a) 
-         -> IO a 
-         -> IO void
+         -> (a -> Data.ByteString.ByteString -> IO a) -- ^ State update function.
+         -> IO a -- ^ Monadic action for getting the initial state.
+         -> IO void -- ^ The result action never returns!
 tailFile filepath callback initial = withINotify (\i -> 
     do sem <- newEmptyMVar
        state <- initial
