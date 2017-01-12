@@ -1,5 +1,5 @@
 name:                tailfile-hinotify
-version:             1.0.0.0
+version:             1.0.0.1
 synopsis:            Tail files in Unix, using hinotify. 
 description:         Tail files in Unix, using hinotify. 
 license:             MIT
