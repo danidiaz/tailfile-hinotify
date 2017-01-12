@@ -67,15 +67,14 @@ tailFile filepath callback initial = withINotify (\i ->
                                               putMVar sem new))
                    removeWatch
                    (\_ -> withFile filepath ReadMode (\h -> 
-                              do if pristine then hSeek h SeekFromEnd 0
-                                             else return ()
+                              do when pristine 
+                                      (hSeek h SeekFromEnd 0)
                                  sleeper sem h a))
     sleeper sem h =
         let go ms a = do event <- takeMVar sem
                          size' <- hFileSize h 
-                         for_ ms (\size -> if size' < size -- truncation 
-                                           then hSeek h AbsoluteSeek 0
-                                           else return ())
+                         for_ ms (\size -> when (size' < size) -- truncation 
+                                                (hSeek h AbsoluteSeek 0))
                          !a' <- drainBytes h a
                          if getAny event then return a'
                                          else go (Just size') a'
