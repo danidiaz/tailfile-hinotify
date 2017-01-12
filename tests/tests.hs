@@ -28,6 +28,9 @@ main = defaultMain tests
 tests :: TestTree
 tests = testGroup "Tests" [ testCase "simple" testSimple
                           , testCase "preexisting" testPreexisting
+                          , testCase "truncation" testTruncation
+                          , testCase "move" testMove
+                          , testCase "notExistingAtFirst" testMove
                           ]
 
 testSimple :: IO ()
@@ -54,6 +57,59 @@ testPreexisting =
                                  catToFile filepath content2)
                           filename1
      assertEqual "" (newlines [content1,content2]) bytes
+
+testTruncation :: IO ()
+testTruncation = 
+  do deleteFiles
+     Bytes.writeFile filename1 "previous content\n"
+     let content1 = "1 new content"
+         content2 = "2 new content"
+     bytes <- tailToIORef (\filepath -> 
+                              do catToFile filepath content1
+                                 halfsec
+                                 truncateFile filepath
+                                 halfsec
+                                 catToFile filepath content2)
+                          filename1
+     assertEqual "" (newlines [content1,content2]) bytes
+
+testMove :: IO ()
+testMove = 
+  do deleteFiles
+     let content1 = "1 new content"
+         content2 = "2 new content"
+     bytes <- tailToIORef (\filepath -> 
+                              do catToFile filepath content1
+                                 halfsec
+                                 renameFile filepath filename2
+                                 halfsec
+                                 catToFile filepath content2
+                                 halfsec
+                                 halfsec
+                                 halfsec)
+                          filename1
+     assertEqual "" (newlines [content1,content2]) bytes
+
+testNotExistingAtFirst :: IO ()
+testNotExistingAtFirst = 
+  do deleteFiles
+     let content1 = "1 new content"
+         content2 = "2 new content"
+     bytes <- tailToIORef (\filepath -> 
+                              do halfsec
+                                 halfsec
+                                 catToFile filepath content1
+                                 halfsec
+                                 catToFile filepath content2
+                                 halfsec
+                                 halfsec)
+                          filename1
+     assertEqual "" (newlines [content1,content2]) bytes
+
+truncateFile :: FilePath -> IO ()
+truncateFile filepath =
+    execute (piped (shell ("truncate -s 0 "<> filepath))) 
+            (pure ())
 
 catToFile :: FilePath -> ByteString -> IO ()
 catToFile filepath content =
