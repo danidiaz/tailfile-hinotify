@@ -17,6 +17,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import System.Directory
+import System.FilePath((</>))
 import System.IO
 import System.IO.Error
 import System.Process.Streaming
@@ -26,28 +27,15 @@ main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Tests" [ testCase "simple" testSimple
+tests = testGroup "Tests" [ testCase "notExistingAtFirst" testNotExistingAtFirst
                           , testCase "preexisting" testPreexisting
                           , testCase "truncation" testTruncation
                           , testCase "move" testMove
-                          , testCase "notExistingAtFirst" testMove
                           ]
-
-testSimple :: IO ()
-testSimple = 
-  do deleteFiles
-     let content1 = "1 new content"
-         content2 = "2 new content"
-     bytes <- tailToIORef (\filepath -> 
-                              do catToFile filepath content1
-                                 halfsec
-                                 catToFile filepath content2)
-                          filename1
-     assertEqual "" (newlines [content1,content2]) bytes
 
 testPreexisting :: IO ()
 testPreexisting = 
-  do deleteFiles
+  do (filename1,_) <- deleteFiles
      Bytes.writeFile filename1 "previous content\n"
      let content1 = "1 new content"
          content2 = "2 new content"
@@ -60,7 +48,7 @@ testPreexisting =
 
 testTruncation :: IO ()
 testTruncation = 
-  do deleteFiles
+  do (filename1,_) <- deleteFiles
      Bytes.writeFile filename1 "previous content\n"
      let content1 = "1 new content"
          content2 = "2 new content"
@@ -75,7 +63,7 @@ testTruncation =
 
 testMove :: IO ()
 testMove = 
-  do deleteFiles
+  do (filename1,filename2) <- deleteFiles
      let content1 = "1 new content"
          content2 = "2 new content"
      bytes <- tailToIORef (\filepath -> 
@@ -92,13 +80,11 @@ testMove =
 
 testNotExistingAtFirst :: IO ()
 testNotExistingAtFirst = 
-  do deleteFiles
+  do (filename1,_) <- deleteFiles
      let content1 = "1 new content"
          content2 = "2 new content"
      bytes <- tailToIORef (\filepath -> 
-                              do halfsec
-                                 halfsec
-                                 catToFile filepath content1
+                              do catToFile filepath content1
                                  halfsec
                                  catToFile filepath content2
                                  halfsec
@@ -119,26 +105,26 @@ catToFile filepath content =
 halfsec :: IO ()
 halfsec = threadDelay 5e5
 
-filename1 :: FilePath
-filename1 = "/tmp/haskell_tailfile_test_1_387493423492347.txt"
-
-filename2 :: FilePath
-filename2 = "/tmp/haskell_tailfile_test_2_387493423492347.txt"
-
 newlines :: [ByteString] -> ByteString
 newlines bs = mconcat . map (\b -> b <> "\n") $ bs
 
-deleteFiles :: IO ()
-deleteFiles = for_ [filename1,filename2]
-                   (\filepath -> do _ <- tryJust (guard . isDoesNotExistError) 
-                                                 (removeFile filepath)
-                                    pure ())
+deleteFiles :: IO (FilePath,FilePath)
+deleteFiles = do
+    tmp <- getTemporaryDirectory  
+    let (basename1,basename2) = ("haskell_tailfile_test_1_387493423492347.txt"
+                                ,"haskell_tailfile_test_2_387493423492347.txt")
+        (filename1,filename2) = (tmp </> basename1,tmp </> basename2)
+    for_ [filename1,filename2]
+         (\filepath -> do _ <- tryJust (guard . isDoesNotExistError) 
+                                       (removeFile filepath)
+                          pure ())
+    return (filename1,filename2)
 
 tailToIORef :: (FilePath -> IO ()) -> FilePath -> IO Data.ByteString.ByteString
 tailToIORef writer filepath =
   do ref <- newIORef mempty
      let addToRef _ bytes = modifyIORef' ref (\b -> b <> bytes) 
-     runConceit (Conceit (Left <$> writer filepath)    
+     runConceit (Conceit (Left <$> (halfsec *> halfsec *> writer filepath))    
                  *> 
                  _Conceit (tailFile filepath addToRef (pure ())))
      readIORef ref 
