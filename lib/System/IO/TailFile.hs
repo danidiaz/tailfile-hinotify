@@ -11,6 +11,7 @@ module System.IO.TailFile (tailFile) where
 
 import Data.Foldable
 import Data.Monoid
+import Data.ByteString (ByteString)
 import qualified Data.ByteString
 import Data.ByteString.Lazy.Internal (defaultChunkSize)
 import Control.Concurrent (threadDelay)
@@ -37,7 +38,7 @@ import System.IO.Error (isDoesNotExistError)
 
     Data already existing in the file before `tailFile` is invoked is ignored.
  -}
-tailFile :: FilePath 
+tailFile :: ByteString -- ^ System.Posix.ByteString.FilePath.RawFilePath 
          -> (a -> Data.ByteString.ByteString -> IO a) -- ^ State update function.
          -> IO a -- ^ Monadic action for getting the initial state.
          -> IO void -- ^ The result action never returns!
