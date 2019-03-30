@@ -1,10 +1,10 @@
-{-| Tail files in Unix, using folds form the @foldl@ package.
+{-| Tail files in Unix, using folds from the @foldl@ package.
 
  -}
 module System.IO.TailFile.Foldl where
 
-import           Data.ByteString (ByteString)
-import qualified Control.Foldl as L
+import qualified Control.Foldl      as L
+import           Data.ByteString    (ByteString)
 import qualified System.IO.TailFile
 
 {-| Like 'System.IO.TailFile.tailFile', but it takes a 'L.FoldM'.
